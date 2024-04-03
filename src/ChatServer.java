@@ -14,10 +14,11 @@ class MyWebSocketServer extends WebSocketServer {
     public MyWebSocketServer(int port) {
         super(new InetSocketAddress(port));
     }
-
+    int  counter = 1;
     @Override
     public void onOpen(WebSocket conn, ClientHandshake handshake) {
         connections.add(conn);
+        conn.setAttachment("用户"+counter+++":");
         System.out.println("New connection from " + conn.getRemoteSocketAddress());
         // 发送欢迎消息或其他初始化消息
     }
@@ -32,7 +33,7 @@ class MyWebSocketServer extends WebSocketServer {
     public void onMessage(WebSocket conn, String message) {
         System.out.println("Received message from " + conn.getRemoteSocketAddress() + ": " + message);
         // 广播消息给所有连接
-        broadcast(message);
+        broadcast(conn.getAttachment()+message);
     }
 
     @Override
