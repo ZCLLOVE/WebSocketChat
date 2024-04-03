@@ -1,90 +1,64 @@
-import java.io.*;
-import java.net.*;
+import org.java_websocket.WebSocket;
+import org.java_websocket.handshake.ClientHandshake;
+import org.java_websocket.server.WebSocketServer;
 
-public class ChatServer {
-    private final int port;
-    private ServerSocket serverSocket;
-    private boolean running = true;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.util.HashSet;
+import java.util.Set;
 
-    public ChatServer(int port) {
-        this.port = port;
+class MyWebSocketServer extends WebSocketServer {
+
+    private Set<WebSocket> connections = new HashSet<>();
+
+    public MyWebSocketServer(int port) {
+        super(new InetSocketAddress(port));
     }
 
-    public void start() {
-        try {
-            serverSocket = new ServerSocket(port);
-            System.out.println("服务器开启在 端口：" + port);
+    @Override
+    public void onOpen(WebSocket conn, ClientHandshake handshake) {
+        connections.add(conn);
+        System.out.println("New connection from " + conn.getRemoteSocketAddress());
+        // 发送欢迎消息或其他初始化消息
+    }
 
-            while (running) {
-                Socket clientSocket = serverSocket.accept();
-                new Thread(new ClientHandler(clientSocket)).start();
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            if (serverSocket != null) {
-                try {
-                    serverSocket.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
+    @Override
+    public void onClose(WebSocket conn, int code, String reason, boolean remote) {
+        connections.remove(conn);
+        System.out.println("Connection closed: " + conn.getRemoteSocketAddress());
+    }
+
+    @Override
+    public void onMessage(WebSocket conn, String message) {
+        System.out.println("Received message from " + conn.getRemoteSocketAddress() + ": " + message);
+        // 广播消息给所有连接
+        broadcast(message);
+    }
+
+    @Override
+    public void onError(WebSocket conn, Exception ex) {
+        ex.printStackTrace();
+        if (conn != null) {
+            System.err.println("Error for " + conn.getRemoteSocketAddress());
         }
     }
 
-    public void stop() {
-        running = false;
-        try {
-            if (serverSocket != null) {
-                serverSocket.close();
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+    @Override
+    public void onStart() {
+        System.out.println("Server started");
     }
 
-    private class ClientHandler implements Runnable {
-        private final Socket clientSocket;
-        private BufferedReader reader;
-        private PrintWriter writer;
-
-        public ClientHandler(Socket clientSocket) {
-            this.clientSocket = clientSocket;
-        }
-
-        @Override
-        public void run() {
-            try {
-                reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-                writer = new PrintWriter(clientSocket.getOutputStream(), true);
-
-                String message;
-                while ((message = reader.readLine()) != null) {
-                    System.out.println( message);
-                    //broadcast(message);
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            } finally {
-                try {
-                    if (clientSocket != null) {
-                        clientSocket.close();
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+    public void broadcast(String text) {
+        for (WebSocket conn : connections) {
+            if (conn.isOpen()) {
+                conn.send(text);
             }
-        }
-
-        private void broadcast(String message) {
-            // 这里可以添加逻辑来广播消息给所有客户端
-            // 因为这只是一个简单示例，我们仅打印到控制台
-            System.out.println("Broadcasting: " + message);
         }
     }
 
     public static void main(String[] args) {
-        ChatServer server = new ChatServer(8887);
+        int port = 8887; // 使用与前端WebSocket相同的端口
+        MyWebSocketServer server = new MyWebSocketServer(port);
         server.start();
     }
 }
